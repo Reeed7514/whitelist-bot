@@ -3,7 +3,7 @@ import { RestyResponse } from 'resty-client'
 import SteamID from 'steamid'
 import dotenv from 'dotenv'
 import * as whitelist from './whitelist'
-// import { checkVacBans, getPlayerName } from './steam.js'
+import logger from './winston'
 
 dotenv.config()
 
@@ -25,49 +25,51 @@ const ws = createWebsocket(testConfig)
 
 
 
-client.meApi.meGuilds()
-    .then((res: RestyResponse<IGuild[]>) => {
+// client.meApi.meGuilds()
+//     .then((res: RestyResponse<IGuild[]>) => {
 
-        // console.log('guilds', res.data)
+//         console.log('guilds', res.data)
 
-        return res.data[0].id
+//         const guild = res.data.find(guild => guild.name === 'AXE 测试频道') as IGuild
 
-    })
-    .then((guildId: string) => {
+//         return guild.id
 
-        console.log('got guild id', guildId)
+//     })
+//     .then((guildId: string) => {
 
-        GUILD_ID = guildId
+//         console.log('got guild id', guildId)
 
-        return client.channelApi.channels(guildId)
+//         GUILD_ID = guildId
 
-    })
-    .then((res: RestyResponse<IChannel[]>) => {
+//         return client.channelApi.channels(guildId)
 
-        // console.log('channels', res.data)
+//     })
+//     .then((res: RestyResponse<IChannel[]>) => {
 
-        const channel = res.data.find(channel => channel.name === '白名单')
+//         // console.log('channels', res.data)
 
-        if (channel) {
-            console.log("got channel id", channel.id)
+//         const channel = res.data.find(channel => channel.name === '白名单')
 
-            CHANNEL_ID = channel.id
-        }
+//         if (channel) {
+//             console.log("got channel id", channel.id)
 
-    })
-    .catch(err => {
-        console.log(err)
-    })
+//             CHANNEL_ID = channel.id
+//         }
+
+//     })
+//     .catch(err => {
+//         console.log(err)
+//     })
 
 
-async function pushMsg(content: string, msg_id: string) {
+async function pushMsg(content: string, channel_id: string, msg_id: string) {
 
-    if (!CHANNEL_ID) {
-        console.log('channel id is not set')
+    if (!channel_id) {
+        logger.info('channel id is not provided')
         return
     }
 
-    await client.messageApi.postMessage(CHANNEL_ID, {
+    await client.messageApi.postMessage(channel_id, {
         msg_id,
         content
     })
@@ -76,9 +78,15 @@ async function pushMsg(content: string, msg_id: string) {
 
 ws.on('GUILD_MESSAGES', async (data: { eventType: string, eventId: string, msg: IMessage }) => {
 
-    console.log('-----------------------------')
 
-    console.log(data.msg.author.username + ' sent: \n' + data.msg.content)
+    logger.info('-----------------------------')
+
+    logger.info(data.msg.author.username + ' sent:')
+
+    logger.info(data.msg.content)
+
+
+    let channel_id = data.msg.channel_id
 
     let msg_id = data.msg.id
 
@@ -87,6 +95,7 @@ ws.on('GUILD_MESSAGES', async (data: { eventType: string, eventId: string, msg: 
     if (data.msg.content?.startsWith('/wt')) {
 
         try {
+
             let steamId = ''
 
             const regex = /\/wt\s+(\S+)/
@@ -95,31 +104,29 @@ ws.on('GUILD_MESSAGES', async (data: { eventType: string, eventId: string, msg: 
             if (match) {
                 steamId = match[1]
             } else {
-                await pushMsg('指令格式:\n/wt 【STEAM ID】', msg_id)
+                await pushMsg('指令格式:\n/wt 【STEAM ID】', channel_id, msg_id)
                 return
             }
-
-
-
 
             let sid = new SteamID(steamId)
 
             if (!sid.isValidIndividual()) {
-                await pushMsg('无效的Steam ID', msg_id)
+                await pushMsg('无效的Steam ID', channel_id, msg_id)
                 return
             }
 
             let steamid64 = sid.toString()
 
-            console.log('steamId', steamid64)
-
+            logger.log('info', 'got steamid64 %s', steamid64)
 
             const message = await whitelist.checkWhitelist(id, steamid64)
 
-            await pushMsg(message, msg_id)
+
+            await pushMsg(message, channel_id, msg_id)
+
 
         } catch (error) {
-            console.log(error)
+            logger.log('error', 'error processing message %o', error)
         }
     }
 

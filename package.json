@@ -15,7 +15,8 @@
     "dotenv": "^16.3.0",
     "mysql2": "^3.3.5",
     "qq-guild-bot": "^2.9.5",
-    "steamid": "^2.0.0"
+    "steamid": "^2.0.0",
+    "winston": "^3.9.0"
   },
   "devDependencies": {
     "@types/node": "^20.3.1",
