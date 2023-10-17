@@ -2,7 +2,7 @@ import { GetWsParam, IGuild, IChannel, IMessage, AvailableIntentsEventsEnum, cre
 import { RestyResponse } from 'resty-client'
 import SteamID from 'steamid'
 import dotenv from 'dotenv'
-import * as whitelist from './whitelist'
+import tryWhitelist from './whitelist'
 import logger from './winston'
 
 dotenv.config()
@@ -22,6 +22,65 @@ const client = createOpenAPI(testConfig)
 
 // establish websocket connection
 const ws = createWebsocket(testConfig)
+
+async function pushMsg(content: string, channel_id: string, msg_id: string) {
+
+    if (!channel_id) {
+        logger.info('channel id is not provided')
+        return
+    }
+
+    await client.messageApi.postMessage(channel_id, {
+        msg_id,
+        content
+    })
+}
+
+
+ws.on('GUILD_MESSAGES', async (data: { eventType: string, eventId: string, msg: IMessage }) => {
+    logger.info('-----------------------------')
+
+    logger.info(data.msg.author.username + ' sent:')
+
+    logger.info(data.msg.content)
+
+
+    let channel_id = data.msg.channel_id
+    let msg_id = data.msg.id
+    let id = data.msg.author.id
+
+    if (data.msg.content?.startsWith('/bind')) {
+
+        try {
+            let steamId = ''
+
+            const regex = /\/bind\s+(\S+)/
+
+            const match = data.msg.content.match(regex)
+            if (match) {
+                steamId = match[1]
+            } else {
+                await pushMsg('指令格式:\n/bind 【STEAM ID】', channel_id, msg_id)
+                return
+            }
+
+            let sid = new SteamID(steamId)
+
+            if (!sid.isValidIndividual()) {
+                await pushMsg('无效的Steam ID', channel_id, msg_id)
+                return
+            }
+
+            logger.log('info', 'got steamid64 %s', sid.toString())
+
+            const message = await tryWhitelist(id, sid)
+
+            await pushMsg(message, channel_id, msg_id)
+        } catch (error) {
+            logger.log('error', 'error processing message %o', error)
+        }
+    }
+})
 
 
 
@@ -61,76 +120,6 @@ const ws = createWebsocket(testConfig)
 //         console.log(err)
 //     })
 
-
-async function pushMsg(content: string, channel_id: string, msg_id: string) {
-
-    if (!channel_id) {
-        logger.info('channel id is not provided')
-        return
-    }
-
-    await client.messageApi.postMessage(channel_id, {
-        msg_id,
-        content
-    })
-}
-
-
-ws.on('GUILD_MESSAGES', async (data: { eventType: string, eventId: string, msg: IMessage }) => {
-
-
-    logger.info('-----------------------------')
-
-    logger.info(data.msg.author.username + ' sent:')
-
-    logger.info(data.msg.content)
-
-
-    let channel_id = data.msg.channel_id
-
-    let msg_id = data.msg.id
-
-    let id = data.msg.author.id
-
-    if (data.msg.content?.startsWith('/wt')) {
-
-        try {
-
-            let steamId = ''
-
-            const regex = /\/wt\s+(\S+)/
-
-            const match = data.msg.content.match(regex)
-            if (match) {
-                steamId = match[1]
-            } else {
-                await pushMsg('指令格式:\n/wt 【STEAM ID】', channel_id, msg_id)
-                return
-            }
-
-            let sid = new SteamID(steamId)
-
-            if (!sid.isValidIndividual()) {
-                await pushMsg('无效的Steam ID', channel_id, msg_id)
-                return
-            }
-
-            let steamid64 = sid.toString()
-
-            logger.log('info', 'got steamid64 %s', steamid64)
-
-            const message = await whitelist.checkWhitelist(id, steamid64)
-
-
-            await pushMsg(message, channel_id, msg_id)
-
-
-        } catch (error) {
-            logger.log('error', 'error processing message %o', error)
-        }
-    }
-
-})
 
 
 
