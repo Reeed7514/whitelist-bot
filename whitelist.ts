@@ -32,6 +32,15 @@ const pool = mysql.createPool({
 	database: process.env.DATABASE_TARGET
 })
 
+async function getPlayerName(steamId64: string): Promise<string> {
+	const res = await axios.get(
+		`${steamUrl}/ISteamUser/GetPlayerSummaries/v2?key=${process.env.STEAM_API_KEY}&steamids=${steamId64}`,
+		{
+			httpsAgent: agent
+		})
+	// console.log('player summary', res.data)
+	return res.data.response.players[0].personaname
+}
 
 async function checkVacBans(steamId64: string): Promise<validateResult> {
 	const res = await axios.get(
@@ -42,17 +51,6 @@ async function checkVacBans(steamId64: string): Promise<validateResult> {
 	// console.log(res.data)
 	const player = res.data.players[0]
 	return player.VACBanned ? validateResult.VACBANNED : validateResult.PASSED
-}
-
-
-async function getPlayerName(steamId64: string): Promise<string> {
-	const res = await axios.get(
-		`${steamUrl}/ISteamUser/GetPlayerSummaries/v2?key=${process.env.STEAM_API_KEY}&steamids=${steamId64}`,
-		{
-			httpsAgent: agent
-		})
-	// console.log('player summary', res.data)
-	return res.data.response.players[0].personaname
 }
 
 async function checkGlobalban(steamId64: string): Promise<validateResult> {
